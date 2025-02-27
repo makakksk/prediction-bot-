@@ -1,0 +1,187 @@
+const { Telegraf, Markup } = require("telegraf");
+const mongoose = require("mongoose");
+
+const bot = new Telegraf("7630934829:AAEA1j9YTvT5EDCKhcVOfP3VRTjEcM-qqr0"); // ✅ Replace with your bot token
+const ADMIN_ID = "7103658936"; // ✅ Replace with your Admin Telegram ID
+const MONGO_URI = "mongodb+srv://Hacker14261:Hacker%40123@telegram.77z2s.mongodb.net/?retryWrites=true&w=majority&appName=Telegram"; // ✅ Replace with your MongoDB connection string
+
+// 🛠️ Connect to MongoDB Atlas
+mongoose.connect(MONGO_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true
+}).then(() => console.log("✅ Connected to MongoDB Atlas"))
+  .catch(err => console.error("❌ MongoDB Connection Error:", err));
+
+// 📌 Define User Schema
+const userSchema = new mongoose.Schema({
+    telegramId: String,
+    isApproved: Boolean
+});
+
+const User = mongoose.model("User", userSchema);
+
+// 🎯 Main Menu Keyboard
+const predictionMenu = Markup.keyboard([
+    ["🚀 Start Prediction", "➡️ Next Prediction"]
+]).resize();
+
+// 🎯 Start Command
+bot.start(async (ctx) => {
+    const userId = ctx.from.id;
+    console.log(`🆕 New User Started: ${userId}`);
+
+    await ctx.reply(
+        `✅ Welcome To SureShot Prediction Bot 🔰\n\n` +
+        `You need to register first to get access to predictions. 😎\n\n` +
+        `📝 Register Here: \n1️⃣ Bharat Club https://bhtclub1.com/#/register?invitationCode=56367247975\n` +
+        `2️⃣ Complete the registration process\n` +
+        `3️⃣ Send a screenshot of your profile\n` +
+        `4️⃣ Wait for admin approval ✅`
+    );
+});
+
+// 📸 Handle Screenshot Submission
+bot.on("photo", async (ctx) => {
+    try {
+        const userId = ctx.from.id;
+        const photoId = ctx.message.photo[ctx.message.photo.length - 1].file_id;
+
+        console.log(`📸 Screenshot received from User: ${userId}`);
+
+        // ✅ Send Screenshot to Admin
+        await bot.telegram.sendPhoto(ADMIN_ID, photoId, {
+            caption: `📩 New Registration Request\n👤 User ID: ${userId}`,
+            reply_markup: {
+                inline_keyboard: [
+                    [{ text: "✅ Approve", callback_data: `approve_${userId}` }],
+                    [{ text: "❌ Reject", callback_data: `reject_${userId}` }]
+                ]
+            }
+        });
+
+        // ✅ Confirm to User
+        await ctx.reply("✅ Screenshot received! Please wait for admin approval.");
+
+    } catch (error) {
+        console.error("❌ Error in processing photo:", error);
+        await ctx.reply("⚠️ Error occurred. Please try again.");
+    }
+});
+
+// 🔥 Handle Approve/Reject Actions
+bot.on("callback_query", async (ctx) => {
+    try {
+        const callbackData = ctx.callbackQuery.data;
+        const userId = callbackData.split("_")[1];
+
+        if (callbackData.startsWith("approve")) {
+            await User.findOneAndUpdate({ telegramId: userId }, { isApproved: true }, { upsert: true });
+
+            // ✅ Show both "Start Prediction" and "Next Prediction" buttons after approval
+            await ctx.telegram.sendMessage(
+                userId, 
+                "✅ Your registration has been approved! You can now access predictions.", 
+                predictionMenu
+            );
+
+            await ctx.editMessageCaption(`✅ Approved by Admin\n👤 User ID: ${userId}`);
+        } 
+        else if (callbackData.startsWith("reject")) {
+            await User.findOneAndDelete({ telegramId: userId });
+            await ctx.telegram.sendMessage(userId, "❌ Your registration has been rejected. Please contact support.");
+            await ctx.editMessageCaption(`❌ Rejected by Admin\n👤 User ID: ${userId}`);
+        }
+
+        await ctx.answerCbQuery();
+    } catch (error) {
+        console.error("❌ Error in callback query:", error);
+    }
+});
+
+// 🔥 Prediction System
+const users = {};
+
+// Function to generate prediction
+function generatePrediction(period) {
+    const colors = ["RED", "GREEN"];
+    const result = Math.floor(Math.random() * 10);
+    const color = colors[Math.floor(Math.random() * 2)];
+    const size = result >= 5 ? "BIG" : "SMALL";
+
+    return `📊 **Prediction Result**\n\n🆔 Period: **${period}**\n🎨 Color: **${color}**\n🎲 Result: **${size}**\n\n✅ Sureshot prediction Only.`;
+}
+
+// 🎯 Common Prediction Handler
+async function handlePrediction(ctx) {
+    const userId = ctx.from.id;
+
+    // 🔍 Check if user is approved
+    const user = await User.findOne({ telegramId: userId });
+
+    if (!user || !user.isApproved) {
+        return ctx.reply("⚠️ You are not approved yet. Please wait for admin approval.");
+    }
+
+    users[userId] = { step: "waiting_period" };
+
+    await ctx.reply("📊 Enter the last 3 digits of the period number:");
+}
+
+// 🎯 Handle "Start Prediction" Button Click
+bot.hears("🚀 Start Prediction", handlePrediction);
+
+// 🎯 Handle "Next Prediction" Button Click (Same as "Start Prediction")
+bot.hears("➡️ Next Prediction", handlePrediction);
+
+// 🎯 Handle User Input for Prediction
+bot.on("text", async (ctx) => {
+    const userId = ctx.from.id;
+    const text = ctx.message.text.trim();
+
+    // ✅ Admin Broadcast Feature
+    if (userId.toString() === ADMIN_ID && text.startsWith("/broadcast")) {
+        const message = text.replace("/broadcast", "").trim();
+        if (!message) {
+            return ctx.reply("⚠️ Please enter a message to broadcast.");
+        }
+
+        // Fetch all approved users
+        const users = await User.find({ isApproved: true });
+        let sentCount = 0;
+
+        for (const user of users) {
+            try {
+                await bot.telegram.sendMessage(user.telegramId, `📢 **Broadcast Message:**\n\n${message}`);
+                sentCount++;
+            } catch (error) {
+                console.error(`❌ Failed to send message to ${user.telegramId}:`, error);
+            }
+        }
+
+        return ctx.reply(`✅ Broadcast sent to ${sentCount} users.`);
+    }
+
+    // 🔍 Check if user is approved
+    const user = await User.findOne({ telegramId: userId });
+
+    if (!user || !user.isApproved) {
+        return ctx.reply("⚠️ You are not approved yet. Please wait for admin approval.");
+    }
+
+    if (users[userId] && users[userId].step === "waiting_period") {
+        if (!/^\d{3}$/.test(text)) {
+            return ctx.reply("⚠️ Please enter a valid 3-digit period number.");
+        }
+
+        // 🔥 Generate Prediction
+        const predictionMessage = generatePrediction(text);
+        users[userId].step = "prediction_done";
+
+        await ctx.reply(predictionMessage);
+    }
+});
+
+// 🔥 Start the bot
+bot.launch()
+    .then(() => console.log("🤖 Bot is running..."))
+    .catch(err => console.error("❌ Bot launch error:", err));
