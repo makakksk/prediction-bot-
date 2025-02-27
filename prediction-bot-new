@@ -1,10 +1,9 @@
 const { Telegraf, Markup } = require("telegraf");
 const mongoose = require("mongoose");
 
-const bot = new Telegraf("7630934829:AAEA1j9YTvT5EDCKhcVOfP3VRTjEcM-qqr0"); // ✅ Replace with your bot token
-const ADMIN_ID = "7103658936"; // ✅ Replace with your Admin Telegram ID
-const MONGO_URI = "mongodb+srv://Hacker14261:Hacker%40123@telegram.77z2s.mongodb.net/?retryWrites=true&w=majority&appName=Telegram"; // ✅ Replace with your MongoDB connection string
-
+const bot = new Telegraf("BOT_TOKEN"); // ✅ Replace with your bot token
+const ADMIN_ID = "ADMIN_ID"; // ✅ Replace with your Admin Telegram ID
+const MONGO_URI = "
 // 🛠️ Connect to MongoDB Atlas
 mongoose.connect(MONGO_URI, {
     useNewUrlParser: true,
